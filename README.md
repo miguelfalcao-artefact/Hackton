@@ -2,6 +2,8 @@
 
 This project monitors an e-commerce mock API with two independent agents: a collector stores every new log record in one cumulative CSV, and a dashboard agent reads that CSV and updates one HTML report.
 
+The bundled mock API and traffic generator are local test fixtures and are excluded from version control. Production inputs are configured through environment variables, without changing agent code.
+
 The collector checks the API log every **30 seconds**. The dashboard watches the CSV and rewrites the same HTML file only when the CSV changes.
 
 ## Project structure
@@ -57,6 +59,17 @@ Check for new log content every 30 seconds:
 ```
 
 Press `Ctrl+C` to stop.
+
+## Configure a production API
+
+Copy `.env.example` to `.env`, then set `API_LOG_PATHS` to the production JSONL log path (multiple paths use the operating system path separator) and `API_SOURCE_ROOT` to the application's source checkout:
+
+```bash
+cp .env.example .env
+./scripts/run_monitor.sh
+```
+
+The runner loads `.env`. Command-line options such as `--api-log`, `--source-root`, `--csv`, and `--html` still override the environment-backed defaults when invoking either Python agent directly. The agent reads local or mounted log files; it does not require network access to the production API.
 
 The two agents:
 

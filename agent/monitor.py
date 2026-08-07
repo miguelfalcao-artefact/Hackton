@@ -12,6 +12,8 @@ import os
 import time
 from pathlib import Path
 
+from config import CSV_PATH, log_paths
+
 
 FIELDS = [
     "record_id", "ts", "level", "service", "logger", "event", "message",
@@ -21,11 +23,13 @@ FIELDS = [
 
 
 def record_id(record: dict) -> str:
+    """Build a stable identifier independent of JSON key order and whitespace."""
     canonical = json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def read_known_ids(path: Path) -> set[str]:
+    """Load identifiers already written to the cumulative CSV."""
     if not path.exists():
         return set()
     with path.open(newline="", encoding="utf-8") as stream:
@@ -33,6 +37,7 @@ def read_known_ids(path: Path) -> set[str]:
 
 
 def collect(source: Path, destination: Path, known_ids: set[str]) -> tuple[int, list[str]]:
+    """Append unseen valid records from one JSONL file and return warnings."""
     rows: list[dict[str, object]] = []
     warnings: list[str] = []
     with source.open(encoding="utf-8") as stream:
@@ -97,16 +102,18 @@ def log_family(path: Path) -> list[Path]:
 
 
 def main() -> int:
-    project = Path(__file__).resolve().parent.parent
+    """Parse settings and run one collection pass or the polling loop."""
     parser = argparse.ArgumentParser(description="Collect new JSONL logs into a cumulative CSV every 30 seconds")
     parser.add_argument("--api-log", type=Path, action="append", help="JSONL source; repeat for multiple sources (rotated siblings are included)")
-    parser.add_argument("--csv", type=Path, default=project / "runtime/logs.csv")
+    parser.add_argument("--csv", type=Path, default=CSV_PATH)
     parser.add_argument("--interval", type=float, default=30.0)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     if args.interval < 0.2:
         parser.error("interval must be at least 0.2 seconds")
-    configured = args.api_log or [project / "error_generator/logs/api.jsonl"]
+    configured = args.api_log or log_paths()
+    if not configured:
+        parser.error("configure at least one API log with --api-log or API_LOG_PATHS")
     sources = [source.resolve(strict=True) for source in configured]
     if any(not source.is_file() for source in sources):
         parser.error("each API log must be a file")

@@ -22,13 +22,14 @@ The dashboard processes `http_request` rows into three fronts: a plain-language 
 ./scripts/run_monitor.sh
 ```
 
-The script starts both agents, stops both when interrupted, and uses these defaults:
+The script loads `.env` when present, starts both agents, and stops both when interrupted. Configuration is environment-backed:
 
-- Source: `error_generator/logs/api.jsonl`
-- CSV: `runtime/logs.csv`
-- HTML: `reports/ecommerce-mock-api/dashboard.html`
-- Collector interval: 30 seconds
-- Dashboard watcher interval: 2 seconds
+- `API_LOG_PATHS`: one or more JSONL logs (OS path separator delimited)
+- `API_SOURCE_ROOT`: application source used for matching error codes and routes
+- `MONITOR_CSV_PATH`: cumulative CSV (default `runtime/logs.csv`)
+- `DASHBOARD_HTML_PATH`: generated report (default `reports/api/dashboard.html`)
+- `COLLECTOR_INTERVAL_SECONDS`: collector interval (default 30)
+- `DASHBOARD_INTERVAL_SECONDS`: dashboard interval (default 2)
 
 For deterministic one-shot execution:
 

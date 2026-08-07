@@ -18,6 +18,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from config import CSV_PATH, HTML_PATH, SOURCE_ROOT
+
 
 ERROR_MEANINGS = {
     "rate_limit_exceeded": "Traffic exceeded the configured API limit.",
@@ -31,6 +33,7 @@ ERROR_MEANINGS = {
 
 
 def percentile(values: list[float], fraction: float) -> float | None:
+    """Return the nearest-rank percentile, or None for an empty sample."""
     if not values:
         return None
     ordered = sorted(values)
@@ -38,6 +41,7 @@ def percentile(values: list[float], fraction: float) -> float | None:
 
 
 def atomic_write(path: Path, content: str) -> None:
+    """Replace the dashboard only after its complete contents are on disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     temporary.write_text(content, encoding="utf-8")
@@ -56,6 +60,7 @@ def error_origin(status: int, error: str) -> tuple[str, str]:
 
 
 def find_source_references(source_root: Path, needles: set[str]) -> dict[str, list[tuple[str, int, str]]]:
+    """Find up to three source lines for each route or error-code needle."""
     references: dict[str, list[tuple[str, int, str]]] = {needle: [] for needle in needles if needle}
     extensions = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".java", ".rb", ".php", ".cs"}
     excluded = {".git", "node_modules", "__pycache__"}
@@ -74,6 +79,7 @@ def find_source_references(source_root: Path, needles: set[str]) -> dict[str, li
 
 
 def render(csv_path: Path, source_root: Path) -> tuple[str, int]:
+    """Aggregate collected records and render the complete dashboard document."""
     with csv_path.open(newline="", encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_SH)
         all_rows = list(csv.DictReader(stream))
@@ -216,13 +222,16 @@ def render(csv_path: Path, source_root: Path) -> tuple[str, int]:
 
 
 def stat_signature(path: Path) -> str:
+    """Return the lightweight version marker embedded in the dashboard page."""
     stat = path.stat()
     return f"{stat.st_mtime_ns}-{stat.st_size}"
 
 
 def start_server(html_path: Path, host: str, port: int) -> ThreadingHTTPServer:
+    """Serve only the generated dashboard from a background thread."""
     class DashboardHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            """Return the dashboard for supported paths and reject all others."""
             if urlsplit(self.path).path not in ("/", "/dashboard.html"):
                 self.send_error(404)
                 return
@@ -239,6 +248,7 @@ def start_server(html_path: Path, host: str, port: int) -> ThreadingHTTPServer:
             self.wfile.write(content)
 
         def log_message(self, format: str, *args: object) -> None:
+            """Suppress access logs; agent state is emitted as structured JSON."""
             return
 
     server = ThreadingHTTPServer((host, port), DashboardHandler)
@@ -247,11 +257,11 @@ def start_server(html_path: Path, host: str, port: int) -> ThreadingHTTPServer:
 
 
 def main() -> int:
-    project = Path(__file__).resolve().parent.parent
+    """Watch the CSV and regenerate the dashboard whenever it changes."""
     parser = argparse.ArgumentParser(description="Update one HTML dashboard when the log CSV changes")
-    parser.add_argument("--csv", type=Path, default=project / "runtime/logs.csv")
-    parser.add_argument("--html", type=Path, default=project / "reports/ecommerce-mock-api/dashboard.html")
-    parser.add_argument("--source-root", type=Path, default=project / "mock_api")
+    parser.add_argument("--csv", type=Path, default=CSV_PATH)
+    parser.add_argument("--html", type=Path, default=HTML_PATH)
+    parser.add_argument("--source-root", type=Path, default=SOURCE_ROOT)
     parser.add_argument("--interval", type=float, default=2.0)
     parser.add_argument("--serve", action="store_true", help="serve the live dashboard over HTTP")
     parser.add_argument("--host", default="127.0.0.1")
