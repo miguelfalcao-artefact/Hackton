@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# The log sink is generated output, not source.
+logs/*
+!logs/.gitkeep
